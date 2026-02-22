@@ -33,8 +33,6 @@ import { ReadFileTool } from '../tools/read-file.js';
 import { GrepTool } from '../tools/grep.js';
 import { canUseRipgrep } from '../utils/ripgrepUtils.js';
 import { RipGrepTool } from '../tools/ripGrep.js';
-import { logRipgrepFallback } from '../telemetry/loggers.js';
-import { RipgrepFallbackEvent } from '../telemetry/types.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 
 function createToolMock(toolName: string) {
@@ -605,9 +603,7 @@ describe('Server Config (config.ts)', () => {
         ...baseParams,
         usageStatisticsEnabled: true,
       });
-      await config.initialize();
-
-      expect(QwenLogger.prototype.logStartSessionEvent).toHaveBeenCalledOnce();
+      await expect(config.initialize()).resolves.toBeUndefined();
     });
   });
 
@@ -1183,12 +1179,6 @@ describe('setApprovalMode with folder trust', () => {
       expect(wasRipGrepRegistered).toBe(false);
       expect(wasGrepRegistered).toBe(true);
       expect(canUseRipgrep).toHaveBeenCalledWith(false);
-      expect(logRipgrepFallback).toHaveBeenCalledWith(
-        config,
-        expect.any(RipgrepFallbackEvent),
-      );
-      const event = (logRipgrepFallback as Mock).mock.calls[0][1];
-      expect(event.error).toContain('ripgrep is not available');
     });
 
     it('should fall back to GrepTool and log error when useRipgrep is true and builtin ripgrep is not available', async () => {
@@ -1207,12 +1197,6 @@ describe('setApprovalMode with folder trust', () => {
       expect(wasRipGrepRegistered).toBe(false);
       expect(wasGrepRegistered).toBe(true);
       expect(canUseRipgrep).toHaveBeenCalledWith(true);
-      expect(logRipgrepFallback).toHaveBeenCalledWith(
-        config,
-        expect.any(RipgrepFallbackEvent),
-      );
-      const event = (logRipgrepFallback as Mock).mock.calls[0][1];
-      expect(event.error).toContain('ripgrep is not available');
     });
 
     it('should fall back to GrepTool and log error when canUseRipgrep throws an error', async () => {
@@ -1231,12 +1215,6 @@ describe('setApprovalMode with folder trust', () => {
 
       expect(wasRipGrepRegistered).toBe(false);
       expect(wasGrepRegistered).toBe(true);
-      expect(logRipgrepFallback).toHaveBeenCalledWith(
-        config,
-        expect.any(RipgrepFallbackEvent),
-      );
-      const event = (logRipgrepFallback as Mock).mock.calls[0][1];
-      expect(event.error).toBe(`ripGrep check failed`);
     });
 
     it('should register GrepTool when useRipgrep is false', async () => {

@@ -66,10 +66,10 @@ import { FixedDeque } from 'mnemonist';
 import { AuthType } from '../../core/contentGenerator.js';
 
 // Usage statistics collection endpoint
-const USAGE_STATS_HOSTNAME = 'gb4w8c3ygj-default-sea.rum.aliyuncs.com';
+const USAGE_STATS_HOSTNAME = 'localhost';
 const USAGE_STATS_PATH = '/';
 
-const RUN_APP_ID = 'gb4w8c3ygj@851d5d500f08f92';
+const RUN_APP_ID = '';
 
 /**
  * Interval in which buffered events are sent to RUM.
@@ -100,7 +100,6 @@ export interface LogResponse {
 // Singleton class for batch posting log events to RUM. When a new event comes in, the elapsed time
 // is checked and events are flushed to RUM if at least a minute has passed since the last flush.
 export class QwenLogger {
-  private static instance: QwenLogger;
   private config?: Config;
   private debugLogger: DebugLogger;
   private readonly installationManager: InstallationManager;
@@ -159,14 +158,9 @@ export class QwenLogger {
     return `user-${installationId ?? 'unknown'}`;
   }
 
-  static getInstance(config?: Config): QwenLogger | undefined {
-    if (config === undefined || !config?.getUsageStatisticsEnabled())
-      return undefined;
-    if (!QwenLogger.instance) {
-      QwenLogger.instance = new QwenLogger(config);
-    }
-
-    return QwenLogger.instance;
+  // Telemetry disabled - always return undefined to make all logging no-op
+  static getInstance(_config?: Config): QwenLogger | undefined {
+    return undefined;
   }
 
   enqueueLogEvent(event: RumEvent): void {
