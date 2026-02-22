@@ -20,6 +20,7 @@ export function parseBooleanEnvFlag(
 
 /**
  * Normalize a telemetry target value into TelemetryTarget or undefined.
+ * Only 'local' is allowed - other targets are rejected.
  */
 export function parseTelemetryTargetValue(
   value: string | TelemetryTarget | undefined,
@@ -28,9 +29,7 @@ export function parseTelemetryTargetValue(
   if (value === TelemetryTarget.LOCAL || value === 'local') {
     return TelemetryTarget.LOCAL;
   }
-  if (value === TelemetryTarget.GCP || value === 'gcp') {
-    return TelemetryTarget.GCP;
-  }
+  // Reject any non-local targets
   return undefined;
 }
 
@@ -69,9 +68,12 @@ export async function resolveTelemetrySettings(options: {
     throw new FatalConfigError(
       `Invalid telemetry target: ${String(
         rawTarget,
-      )}. Valid values are: local, gcp`,
+      )}. Only 'local' is allowed.`,
     );
   }
+
+  // Force target to always be LOCAL - other targets are not allowed
+  const forcedTarget = TelemetryTarget.LOCAL;
 
   const otlpEndpoint =
     argv.telemetryOtlpEndpoint ??
@@ -110,7 +112,7 @@ export async function resolveTelemetrySettings(options: {
 
   return {
     enabled,
-    target,
+    target: forcedTarget,
     otlpEndpoint,
     otlpProtocol,
     logPrompts,

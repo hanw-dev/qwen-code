@@ -31,6 +31,7 @@ import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import type { Config } from '../config/config.js';
 import { SERVICE_NAME } from './constants.js';
 import { initializeMetrics } from './metrics.js';
+import { TelemetryTarget } from './index.js';
 import {
   FileLogExporter,
   FileMetricExporter,
@@ -87,9 +88,16 @@ export function initializeTelemetry(config: Config): void {
 
   const otlpEndpoint = config.getTelemetryOtlpEndpoint();
   const otlpProtocol = config.getTelemetryOtlpProtocol();
+  const telemetryTarget = config.getTelemetryTarget();
   const parsedEndpoint = parseOtlpEndpoint(otlpEndpoint, otlpProtocol);
   const telemetryOutfile = config.getTelemetryOutfile();
-  const useOtlp = !!parsedEndpoint && !telemetryOutfile;
+
+  // Only use OTLP if target is not LOCAL and endpoint is configured
+  // This ensures LOCAL target always uses file or console exporters
+  const useOtlp =
+    telemetryTarget !== TelemetryTarget.LOCAL &&
+    !!parsedEndpoint &&
+    !telemetryOutfile;
 
   let spanExporter:
     | OTLPTraceExporter
