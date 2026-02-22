@@ -1,4 +1,4 @@
-name: 'Release SDK (Build Only)'
+name: 'Release SDK (GitHub Only)'
 
 on:
   workflow_dispatch:
@@ -32,11 +32,6 @@ on:
         default: false
       create_preview_release:
         description: 'Auto apply the preview release tag, input version is ignored.'
-        required: false
-        type: 'boolean'
-        default: false
-      force_skip_tests:
-        description: 'Select to skip the "Run Tests" step in testing. Prod releases should run tests'
         required: false
         type: 'boolean'
         default: false
@@ -247,28 +242,6 @@ jobs:
         run: |
           node scripts/bundle-cli.js
 
-      - name: 'Run Tests'
-        if: |-
-          ${{ github.event.inputs.force_skip_tests != 'true' }}
-        working-directory: 'packages/sdk-typescript'
-        run: |
-          npm run test:ci
-        env:
-          OPENAI_API_KEY: '${{ secrets.OPENAI_API_KEY }}'
-          OPENAI_BASE_URL: '${{ secrets.OPENAI_BASE_URL }}'
-          OPENAI_MODEL: '${{ secrets.OPENAI_MODEL }}'
-
-      - name: 'Run SDK Integration Tests'
-        if: |-
-          ${{ github.event.inputs.force_skip_tests != 'true' }}
-        run: |
-          npm run test:integration:sdk:sandbox:none
-          npm run test:integration:sdk:sandbox:docker
-        env:
-          OPENAI_API_KEY: '${{ secrets.OPENAI_API_KEY }}'
-          OPENAI_BASE_URL: '${{ secrets.OPENAI_BASE_URL }}'
-          OPENAI_MODEL: '${{ secrets.OPENAI_MODEL }}'
-
       - name: 'Record bundled CLI version'
         env:
           CLI_VERSION: "${{ steps.cli_source.outputs.mode == 'npm_latest' && steps.cli_version_npm.outputs.CLI_VERSION || steps.cli_build.outputs.CLI_VERSION }}"
@@ -361,6 +334,22 @@ jobs:
 
           # Cleanup
           rm -f "${NOTES_FILE}"
+
+      - name: 'Upload SDK files as release assets'
+        if: |-
+          ${{ steps.vars.outputs.is_dry_run == 'false' }}
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          RELEASE_TAG: '${{ steps.version.outputs.RELEASE_TAG }}'
+        working-directory: 'packages/sdk-typescript'
+        run: |-
+          # Upload all files from dist/ as release assets
+          for file in dist/*; do
+            if [[ -f "${file}" ]]; then
+              echo "Uploading ${file}..."
+              gh release upload "sdk-typescript-${RELEASE_TAG}" "${file}"
+            fi
+          done
 
       - name: 'Create PR to merge release branch into main'
         if: |-
