@@ -176,35 +176,6 @@ jobs:
         run: |
           node scripts/bundle-cli.js
 
-      - name: 'Build CLI binary'
-        env:
-          CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
-        run: |
-          # Install pkg for creating native binaries
-          npm install -g pkg
-
-          CLI_SOURCE_DIR="./dist"
-
-          # Determine the entry point
-          if [[ -f "${CLI_SOURCE_DIR}/dist/index.js" ]]; then
-            ENTRY_POINT="${CLI_SOURCE_DIR}/dist/index.js"
-          elif [[ -f "${CLI_SOURCE_DIR}/package/dist/index.js" ]]; then
-            ENTRY_POINT="${CLI_SOURCE_DIR}/package/dist/index.js"
-          else
-            echo "::error::Could not find CLI entry point"
-            exit 1
-          fi
-
-          echo "Building CLI binary from: ${ENTRY_POINT}"
-
-          # Build binaries for multiple platforms
-          pkg "${ENTRY_POINT}" \
-            --output "packages/sdk-typescript/dist/cli/qwen-code" \
-            --targets node18-linux-x64,node18-macos-x64,node18-win-x64
-
-          echo "CLI binary built successfully"
-          ls -la packages/sdk-typescript/dist/cli/
-
       - name: 'Record bundled CLI version'
         env:
           CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
@@ -212,6 +183,31 @@ jobs:
           # Create a metadata file to record which CLI version was bundled
           echo "${CLI_VERSION}" > packages/sdk-typescript/dist/BUNDLED_CLI_VERSION
           echo "Bundled CLI version: ${CLI_VERSION}"
+
+      - name: 'Package SDK into binary'
+        env:
+          CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
+        run: |
+          # Install pkg for creating native binaries
+          npm install -g pkg
+
+          SDK_DIST_DIR="packages/sdk-typescript/dist"
+          ENTRY_POINT="${SDK_DIST_DIR}/cli/cli.js"
+
+          if [[ ! -f "${ENTRY_POINT}" ]]; then
+            echo "::error::CLI entry point not found at ${ENTRY_POINT}"
+            exit 1
+          fi
+
+          echo "Packaging SDK into binary from: ${ENTRY_POINT}"
+
+          # Package SDK into a single binary for each platform
+          pkg "${ENTRY_POINT}" \
+            --output "packages/sdk-typescript/dist/qwen-code-sdk" \
+            --targets node18-linux-x64,node18-macos-x64,node18-win-x64
+
+          echo "SDK binary packaged successfully"
+          ls -la packages/sdk-typescript/dist/qwen-code-sdk*
 
       - name: 'Create and switch to a release branch'
         if: |-
