@@ -306,7 +306,7 @@ export interface ConfigParameters {
   contextFileName?: string | string[];
   accessibility?: AccessibilitySettings;
   telemetry?: TelemetrySettings;
-  gitCoAuthor?: boolean;
+  gitCoAuthor?: GitCoAuthorSettings;
   usageStatisticsEnabled?: boolean;
   fileFiltering?: {
     respectGitIgnore?: boolean;
@@ -566,10 +566,25 @@ export class Config {
       outfile: params.telemetry?.outfile,
       useCollector: params.telemetry?.useCollector,
     };
+    // Handle gitCoAuthor: can be boolean (backward compat) or full GitCoAuthorSettings object
+    const gitCoAuthorParams = params.gitCoAuthor;
+    const isEnabled =
+      typeof gitCoAuthorParams === 'boolean'
+        ? gitCoAuthorParams
+        : (gitCoAuthorParams?.enabled ?? true);
+    const coAuthorName =
+      typeof gitCoAuthorParams === 'object'
+        ? gitCoAuthorParams?.name
+        : undefined;
+    const coAuthorEmail =
+      typeof gitCoAuthorParams === 'object'
+        ? gitCoAuthorParams?.email
+        : undefined;
+
     this.gitCoAuthor = {
-      enabled: params.gitCoAuthor ?? true,
-      name: 'Qwen-Coder',
-      email: 'qwen-coder@alibabacloud.com',
+      enabled: isEnabled,
+      name: coAuthorName ?? 'Qwen-Coder',
+      email: coAuthorEmail ?? 'qwen-coder@alibabacloud.com',
     };
     this.usageStatisticsEnabled = params.usageStatisticsEnabled ?? true;
     this.outputLanguageFilePath = params.outputLanguageFilePath;

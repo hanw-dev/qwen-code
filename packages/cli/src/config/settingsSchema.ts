@@ -190,14 +190,48 @@ const SETTINGS_SCHEMA = {
         showInDialog: true,
       },
       gitCoAuthor: {
-        type: 'boolean',
+        type: 'object',
         label: 'Attribution: commit',
         category: 'General',
         requiresRestart: false,
-        default: true,
+        default: {
+          enabled: true,
+          name: 'Qwen-Coder',
+          email: 'qwen-coder@alibabacloud.com',
+        },
         description:
-          'Automatically add a Co-authored-by trailer to git commit messages when commits are made through Qwen Code.',
+          'Configure Co-authored-by trailer for git commit messages. Set enabled to true/false to toggle, and optionally specify name and email.',
         showInDialog: true,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'Enable Co-author Attribution',
+            category: 'General',
+            requiresRestart: false,
+            default: true,
+            description:
+              'Automatically add a Co-authored-by trailer to git commit messages when commits are made through Qwen Code.',
+            showInDialog: true,
+          },
+          name: {
+            type: 'string',
+            label: 'Co-author Name',
+            category: 'General',
+            requiresRestart: false,
+            default: 'Qwen-Coder',
+            description: 'Name to use for the Co-authored-by trailer.',
+            showInDialog: true,
+          },
+          email: {
+            type: 'string',
+            label: 'Co-author Email',
+            category: 'General',
+            requiresRestart: false,
+            default: 'qwen-coder@alibabacloud.com',
+            description: 'Email to use for the Co-authored-by trailer.',
+            showInDialog: true,
+          },
+        },
       },
       checkpointing: {
         type: 'object',
