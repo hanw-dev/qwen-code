@@ -209,9 +209,10 @@ jobs:
           OUTPUT_DIR="${SDK_DIST_DIR}"
 
           # Cross-compile standalone binaries for all targets
-          bun build "${ENTRY_POINT}" --compile --target=bun-linux-x64  --outfile "${OUTPUT_DIR}/qwen-code-sdk-linux"
-          bun build "${ENTRY_POINT}" --compile --target=bun-darwin-x64 --outfile "${OUTPUT_DIR}/qwen-code-sdk-macos"
-          bun build "${ENTRY_POINT}" --compile --target=bun-windows-x64 --outfile "${OUTPUT_DIR}/qwen-code-sdk-win.exe"
+          # Use -baseline variants to support CPUs without AVX instructions
+          bun build "${ENTRY_POINT}" --compile --target=bun-linux-x64-baseline  --outfile "${OUTPUT_DIR}/qwen-code-sdk-linux"
+          bun build "${ENTRY_POINT}" --compile --target=bun-darwin-x64-baseline --outfile "${OUTPUT_DIR}/qwen-code-sdk-macos"
+          bun build "${ENTRY_POINT}" --compile --target=bun-windows-x64-baseline --outfile "${OUTPUT_DIR}/qwen-code-sdk-win.exe"
 
           echo "SDK binary packaged successfully"
           ls -la ${OUTPUT_DIR}/qwen-code-sdk*
