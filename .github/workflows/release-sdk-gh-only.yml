@@ -209,10 +209,13 @@ jobs:
           OUTPUT_DIR="${SDK_DIST_DIR}"
 
           # Cross-compile standalone binaries for all targets
-          # Use -baseline variants to support CPUs without AVX instructions
-          bun build "${ENTRY_POINT}" --compile --target=bun-linux-x64-baseline  --outfile "${OUTPUT_DIR}/qwen-code-sdk-linux"
-          bun build "${ENTRY_POINT}" --compile --target=bun-darwin-x64-baseline --outfile "${OUTPUT_DIR}/qwen-code-sdk-macos"
-          bun build "${ENTRY_POINT}" --compile --target=bun-windows-x64-baseline --outfile "${OUTPUT_DIR}/qwen-code-sdk-win.exe"
+          # Use -baseline variants for x64 to support CPUs without AVX instructions
+          # (Apple Silicon Macs running x64 via Rosetta cannot emulate AVX)
+          bun build "${ENTRY_POINT}" --compile --target=bun-linux-x64-baseline   --outfile "${OUTPUT_DIR}/qwen-code-sdk-linux-x64"
+          bun build "${ENTRY_POINT}" --compile --target=bun-linux-arm64          --outfile "${OUTPUT_DIR}/qwen-code-sdk-linux-arm64"
+          bun build "${ENTRY_POINT}" --compile --target=bun-darwin-x64-baseline  --outfile "${OUTPUT_DIR}/qwen-code-sdk-macos-x64"
+          bun build "${ENTRY_POINT}" --compile --target=bun-darwin-arm64         --outfile "${OUTPUT_DIR}/qwen-code-sdk-macos-arm64"
+          bun build "${ENTRY_POINT}" --compile --target=bun-windows-x64-baseline --outfile "${OUTPUT_DIR}/qwen-code-sdk-win-x64.exe"
 
           echo "SDK binary packaged successfully"
           ls -la ${OUTPUT_DIR}/qwen-code-sdk*
