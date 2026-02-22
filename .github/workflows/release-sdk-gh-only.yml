@@ -211,7 +211,7 @@ jobs:
           pkg "${ENTRY_POINT}" \
             --output "packages/sdk-typescript/dist/qwen-code-sdk" \
             --public-packages "*" \
-            --targets node20-linux-x64,node20-macos-x64,node20-win-x64
+            --targets node18-linux-x64,node18-macos-x64,node18-win-x64
 
           echo "SDK binary packaged successfully"
           ls -la packages/sdk-typescript/dist/qwen-code-sdk*
