@@ -179,7 +179,7 @@ jobs:
             echo "node cli.js -p 'prompt' # non-interactive"
             echo "\`\`\`"
             echo ""
-            echo "Requires Node.js >= 18."
+            echo "Requires Node.js >= 20."
           } > "${NOTES_FILE}"
 
           gh release create "sdk-typescript-${RELEASE_TAG}" \
