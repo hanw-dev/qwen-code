@@ -12,13 +12,6 @@ on:
         required: true
         type: 'string'
         default: 'main'
-      cli_source:
-        description: 'CLI source to bundle. "build_from_source" builds CLI from the current branch/ref (recommended when releasing CLI and SDK together).'
-        required: true
-        type: 'choice'
-        options:
-          - 'build_from_source'
-        default: 'build_from_source'
       dry_run:
         description: 'Run a dry-run of the release process; no branches or GitHub releases will be created.'
         required: true
@@ -146,12 +139,6 @@ jobs:
           # Ensure the package version matches the computed release version.
           # This is required for nightly/preview because npm does not allow re-publishing the same version.
           npm version -w @qwen-code/sdk "${RELEASE_VERSION}" --no-git-tag-version --allow-same-version
-
-      - name: 'Determine CLI source and version'
-        id: 'cli_source'
-        run: |
-          echo "mode=build_from_source" >> "$GITHUB_OUTPUT"
-          echo "Building SDK with CLI built from current branch/ref"
 
       - name: 'Build CLI from source'
         id: 'cli_build'
