@@ -190,15 +190,14 @@ jobs:
 
           rm -f "${NOTES_FILE}"
 
-      - name: 'Upload CLI files as release assets'
+      - name: 'Upload CLI as release asset'
         if: |-
           ${{ steps.vars.outputs.is_dry_run == 'false' }}
         env:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
           RELEASE_TAG: '${{ steps.version.outputs.RELEASE_TAG }}'
         run: |-
-          cd dist
-          find . -type f -exec gh release upload "sdk-typescript-${RELEASE_TAG}" {} \;
+          gh release upload "sdk-typescript-${RELEASE_TAG}" dist/cli.js
 
       - name: 'Create Issue on Failure'
         if: |-
