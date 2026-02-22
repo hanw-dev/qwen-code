@@ -192,18 +192,25 @@ jobs:
           npm install -g pkg
 
           SDK_DIST_DIR="packages/sdk-typescript/dist"
-          ENTRY_POINT="${SDK_DIST_DIR}/cli/cli.js"
+          CLI_DIST_DIR="${SDK_DIST_DIR}/cli"
 
-          if [[ ! -f "${ENTRY_POINT}" ]]; then
-            echo "::error::CLI entry point not found at ${ENTRY_POINT}"
+          # Check for cli.js in multiple possible locations
+          if [[ -f "${CLI_DIST_DIR}/cli.js" ]]; then
+            ENTRY_POINT="${CLI_DIST_DIR}/cli.js"
+          elif [[ -f "dist/cli.js" ]]; then
+            ENTRY_POINT="dist/cli.js"
+          else
+            echo "::error::CLI entry point not found"
             exit 1
           fi
 
           echo "Packaging SDK into binary from: ${ENTRY_POINT}"
 
-          # Package SDK into a single binary for each platform
+          # Package SDK into a single binary with all dependencies
+          # Use --public-packages "*" to include all node_modules
           pkg "${ENTRY_POINT}" \
             --output "packages/sdk-typescript/dist/qwen-code-sdk" \
+            --public-packages "*" \
             --targets node18-linux-x64,node18-macos-x64,node18-win-x64
 
           echo "SDK binary packaged successfully"
