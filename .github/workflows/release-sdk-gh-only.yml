@@ -188,8 +188,9 @@ jobs:
         env:
           CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
         run: |
-          # Install pkg for creating native binaries
-          npm install -g pkg
+          # Install Bun for creating native binaries (handles ESM natively)
+          curl -fsSL https://bun.sh/install | bash
+          export PATH="$HOME/.bun/bin:$PATH"
 
           SDK_DIST_DIR="packages/sdk-typescript/dist"
           CLI_DIST_DIR="${SDK_DIST_DIR}/cli"
@@ -205,16 +206,15 @@ jobs:
           fi
 
           echo "Packaging SDK into binary from: ${ENTRY_POINT}"
+          OUTPUT_DIR="${SDK_DIST_DIR}"
 
-          # Package SDK into a single binary with all dependencies
-          # Use --public-packages "*" to include all node_modules
-          pkg "${ENTRY_POINT}" \
-            --output "packages/sdk-typescript/dist/qwen-code-sdk" \
-            --public-packages "*" \
-            --targets node18-linux-x64,node18-macos-x64,node18-win-x64
+          # Cross-compile standalone binaries for all targets
+          bun build "${ENTRY_POINT}" --compile --target=bun-linux-x64  --outfile "${OUTPUT_DIR}/qwen-code-sdk-linux"
+          bun build "${ENTRY_POINT}" --compile --target=bun-darwin-x64 --outfile "${OUTPUT_DIR}/qwen-code-sdk-macos"
+          bun build "${ENTRY_POINT}" --compile --target=bun-windows-x64 --outfile "${OUTPUT_DIR}/qwen-code-sdk-win.exe"
 
           echo "SDK binary packaged successfully"
-          ls -la packages/sdk-typescript/dist/qwen-code-sdk*
+          ls -la ${OUTPUT_DIR}/qwen-code-sdk*
 
       - name: 'Create and switch to a release branch'
         if: |-
