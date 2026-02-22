@@ -1,0 +1,212 @@
+name: 'Release CLI'
+
+on:
+  push:
+    branches:
+      - 'main'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version to release (e.g., v0.1.11). Required for manual patch releases.'
+        required: false
+        type: 'string'
+      ref:
+        description: 'The branch or ref (full git sha) to release from.'
+        required: true
+        type: 'string'
+        default: 'main'
+      dry_run:
+        description: 'Run a dry-run of the release process; no GitHub releases will be created.'
+        required: true
+        type: 'boolean'
+        default: true
+      create_nightly_release:
+        description: 'Auto apply the nightly release tag, input version is ignored.'
+        required: false
+        type: 'boolean'
+        default: false
+      create_preview_release:
+        description: 'Auto apply the preview release tag, input version is ignored.'
+        required: false
+        type: 'boolean'
+        default: false
+
+concurrency:
+  group: '${{ github.workflow }}'
+  cancel-in-progress: false
+
+jobs:
+  release-cli:
+    runs-on: 'ubuntu-latest'
+    environment:
+      name: 'production-release'
+      url: '${{ github.server_url }}/${{ github.repository }}/releases/tag/sdk-typescript-${{ steps.version.outputs.RELEASE_TAG }}'
+    permissions:
+      contents: 'write'
+      issues: 'write'
+    outputs:
+      RELEASE_TAG: '${{ steps.version.outputs.RELEASE_TAG }}'
+
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8' # ratchet:actions/checkout@v5
+        with:
+          ref: '${{ github.event.inputs.ref || github.sha }}'
+          fetch-depth: 0
+
+      - name: 'Set booleans for simplified logic'
+        env:
+          CREATE_NIGHTLY_RELEASE: '${{ github.event.inputs.create_nightly_release }}'
+          CREATE_PREVIEW_RELEASE: '${{ github.event.inputs.create_preview_release }}'
+          DRY_RUN_INPUT: '${{ github.event.inputs.dry_run }}'
+        id: 'vars'
+        run: |-
+          is_nightly="false"
+          if [[ "${CREATE_NIGHTLY_RELEASE}" == "true" ]]; then
+            is_nightly="true"
+          fi
+          echo "is_nightly=${is_nightly}" >> "${GITHUB_OUTPUT}"
+
+          is_preview="false"
+          if [[ "${CREATE_PREVIEW_RELEASE}" == "true" ]]; then
+            is_preview="true"
+          fi
+          echo "is_preview=${is_preview}" >> "${GITHUB_OUTPUT}"
+
+          is_dry_run="false"
+          if [[ "${DRY_RUN_INPUT}" == "true" ]]; then
+            is_dry_run="true"
+          fi
+          echo "is_dry_run=${is_dry_run}" >> "${GITHUB_OUTPUT}"
+
+      - name: 'Setup Node.js'
+        uses: 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020' # ratchet:actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: 'Install Dependencies'
+        run: |-
+          npm ci
+
+      - name: 'Get the version'
+        id: 'version'
+        run: |
+          VERSION_ARGS=()
+          if [[ "${IS_NIGHTLY}" == "true" ]]; then
+            VERSION_ARGS+=(--type=nightly)
+          elif [[ "${IS_PREVIEW}" == "true" ]]; then
+            VERSION_ARGS+=(--type=preview)
+            if [[ -n "${MANUAL_VERSION}" ]]; then
+              VERSION_ARGS+=("--preview_version_override=${MANUAL_VERSION}")
+            fi
+          else
+            VERSION_ARGS+=(--type=stable)
+            if [[ -n "${MANUAL_VERSION}" ]]; then
+              VERSION_ARGS+=("--stable_version_override=${MANUAL_VERSION}")
+            fi
+          fi
+
+          VERSION_JSON=$(node packages/sdk-typescript/scripts/get-release-version.js "${VERSION_ARGS[@]}")
+          RELEASE_TAG=$(echo "$VERSION_JSON" | jq -r .releaseTag)
+          RELEASE_VERSION=$(echo "$VERSION_JSON" | jq -r .releaseVersion)
+          PREVIOUS_RELEASE_TAG=$(echo "$VERSION_JSON" | jq -r .previousReleaseTag)
+
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "PREVIOUS_RELEASE_TAG=${PREVIOUS_RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+
+          echo "========================================"
+          echo "Release Version Info"
+          echo "========================================"
+          echo "Release Tag:        ${RELEASE_TAG}"
+          echo "Release Version:    ${RELEASE_VERSION}"
+          echo "Previous Release:   ${PREVIOUS_RELEASE_TAG}"
+          echo "========================================"
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          IS_NIGHTLY: '${{ steps.vars.outputs.is_nightly }}'
+          IS_PREVIEW: '${{ steps.vars.outputs.is_preview }}'
+          MANUAL_VERSION: '${{ inputs.version }}'
+
+      - name: 'Build CLI from source'
+        id: 'cli_build'
+        run: |
+          echo "Building CLI from source..."
+          npm run bundle
+
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          echo "CLI_VERSION=${CLI_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Built CLI version: ${CLI_VERSION}"
+
+          if [[ ! -f "./dist/cli.js" ]]; then
+            echo "::error::CLI bundle not found at ./dist/cli.js"
+            exit 1
+          fi
+
+          echo "CLI bundle built successfully"
+          ls -la ./dist/
+
+      - name: 'Create GitHub Release and Tag'
+        if: |-
+          ${{ steps.vars.outputs.is_dry_run == 'false' }}
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          RELEASE_TAG: '${{ steps.version.outputs.RELEASE_TAG }}'
+          PREVIOUS_RELEASE_TAG: '${{ steps.version.outputs.PREVIOUS_RELEASE_TAG }}'
+          IS_NIGHTLY: '${{ steps.vars.outputs.is_nightly }}'
+          IS_PREVIEW: '${{ steps.vars.outputs.is_preview }}'
+          REF: '${{ github.event.inputs.ref || github.sha }}'
+          CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
+        run: |-
+          if [[ "${IS_NIGHTLY}" == "true" || "${IS_PREVIEW}" == "true" ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          else
+            PRERELEASE_FLAG=""
+          fi
+
+          NOTES_FILE=$(mktemp)
+          {
+            echo "## CLI Version: ${CLI_VERSION}"
+            echo ""
+            echo "### Usage"
+            echo ""
+            echo "Download \`cli.js\` (and the \`vendor\`/\`locales\` directories if present) from the release assets, then run:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "node cli.js            # interactive mode"
+            echo "node cli.js --help     # see all options"
+            echo "node cli.js -p 'prompt' # non-interactive"
+            echo "\`\`\`"
+            echo ""
+            echo "Requires Node.js >= 20."
+          } > "${NOTES_FILE}"
+
+          gh release create "sdk-typescript-${RELEASE_TAG}" \
+            --target "${REF}" \
+            --title "Qwen Code CLI ${RELEASE_TAG}" \
+            --notes-file "${NOTES_FILE}" \
+            ${PRERELEASE_FLAG}
+
+          rm -f "${NOTES_FILE}"
+
+      - name: 'Upload CLI as release asset'
+        if: |-
+          ${{ steps.vars.outputs.is_dry_run == 'false' }}
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          RELEASE_TAG: '${{ steps.version.outputs.RELEASE_TAG }}'
+        run: |-
+          gh release upload "sdk-typescript-${RELEASE_TAG}" dist/cli.js
+
+      - name: 'Create Issue on Failure'
+        if: |-
+          ${{ failure() && steps.vars.outputs.is_dry_run == 'false' }}
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          RELEASE_TAG: "${{ steps.version.outputs.RELEASE_TAG || 'N/A' }}"
+          DETAILS_URL: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+        run: |-
+          gh issue create \
+            --title "CLI Release Failed for ${RELEASE_TAG} on $(date +'%Y-%m-%d')" \
+            --body "The CLI release workflow failed. See the full run for details: ${DETAILS_URL}"
