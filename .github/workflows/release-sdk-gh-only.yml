@@ -184,42 +184,6 @@ jobs:
           echo "${CLI_VERSION}" > packages/sdk-typescript/dist/BUNDLED_CLI_VERSION
           echo "Bundled CLI version: ${CLI_VERSION}"
 
-      - name: 'Package SDK into binary'
-        env:
-          CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
-        run: |
-          # Install Bun for creating native binaries (handles ESM natively)
-          curl -fsSL https://bun.sh/install | bash
-          export PATH="$HOME/.bun/bin:$PATH"
-
-          SDK_DIST_DIR="packages/sdk-typescript/dist"
-          CLI_DIST_DIR="${SDK_DIST_DIR}/cli"
-
-          # Check for cli.js in multiple possible locations
-          if [[ -f "${CLI_DIST_DIR}/cli.js" ]]; then
-            ENTRY_POINT="${CLI_DIST_DIR}/cli.js"
-          elif [[ -f "dist/cli.js" ]]; then
-            ENTRY_POINT="dist/cli.js"
-          else
-            echo "::error::CLI entry point not found"
-            exit 1
-          fi
-
-          echo "Packaging SDK into binary from: ${ENTRY_POINT}"
-          OUTPUT_DIR="${SDK_DIST_DIR}"
-
-          # Cross-compile standalone binaries for all targets
-          # Use -baseline variants for x64 to support CPUs without AVX instructions
-          # (Apple Silicon Macs running x64 via Rosetta cannot emulate AVX)
-          bun build "${ENTRY_POINT}" --compile --target=bun-linux-x64-baseline   --outfile "${OUTPUT_DIR}/qwen-code-sdk-linux-x64"
-          bun build "${ENTRY_POINT}" --compile --target=bun-linux-arm64          --outfile "${OUTPUT_DIR}/qwen-code-sdk-linux-arm64"
-          bun build "${ENTRY_POINT}" --compile --target=bun-darwin-x64-baseline  --outfile "${OUTPUT_DIR}/qwen-code-sdk-macos-x64"
-          bun build "${ENTRY_POINT}" --compile --target=bun-darwin-arm64         --outfile "${OUTPUT_DIR}/qwen-code-sdk-macos-arm64"
-          bun build "${ENTRY_POINT}" --compile --target=bun-windows-x64-baseline --outfile "${OUTPUT_DIR}/qwen-code-sdk-win-x64.exe"
-
-          echo "SDK binary packaged successfully"
-          ls -la ${OUTPUT_DIR}/qwen-code-sdk*
-
       - name: 'Create and switch to a release branch'
         if: |-
           ${{ steps.vars.outputs.is_dry_run == 'false' && steps.vars.outputs.is_nightly == 'false' && steps.vars.outputs.is_preview == 'false' }}
@@ -280,6 +244,18 @@ jobs:
             echo "This SDK release bundles CLI version: ${CLI_VERSION}"
             echo ""
             echo "Source: ${CLI_SOURCE_DESC}"
+            echo ""
+            echo "## Usage"
+            echo ""
+            echo "Download \`cli.js\` (and the \`vendor\`/\`locales\` directories if present) from the release assets, then run:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "node cli.js            # interactive mode"
+            echo "node cli.js --help     # see all options"
+            echo "node cli.js -p 'prompt' # non-interactive"
+            echo "\`\`\`"
+            echo ""
+            echo "Requires Node.js >= 18."
             echo ""
             echo "---"
             echo ""
