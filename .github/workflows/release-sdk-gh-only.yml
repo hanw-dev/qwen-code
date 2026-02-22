@@ -13,13 +13,12 @@ on:
         type: 'string'
         default: 'main'
       cli_source:
-        description: 'CLI source to bundle. "build_from_source" builds CLI from the current branch/ref (recommended when releasing CLI and SDK together). "npm_latest" uses the latest stable CLI from npm (recommended for standalone SDK releases).'
+        description: 'CLI source to bundle. "build_from_source" builds CLI from the current branch/ref (recommended when releasing CLI and SDK together).'
         required: true
         type: 'choice'
         options:
           - 'build_from_source'
-          - 'npm_latest'
-        default: 'npm_latest'
+        default: 'build_from_source'
       dry_run:
         description: 'Run a dry-run of the release process; no branches or GitHub releases will be created.'
         required: true
@@ -150,55 +149,12 @@ jobs:
 
       - name: 'Determine CLI source and version'
         id: 'cli_source'
-        env:
-          CLI_SOURCE_INPUT: '${{ github.event.inputs.cli_source }}'
         run: |
-          # Determine CLI source mode
-          if [[ "${CLI_SOURCE_INPUT}" == "npm_latest" ]]; then
-            echo "mode=npm_latest" >> "$GITHUB_OUTPUT"
-            echo "Building SDK with latest stable CLI from npm"
-          else
-            echo "mode=build_from_source" >> "$GITHUB_OUTPUT"
-            echo "Building SDK with CLI built from current branch/ref"
-          fi
-
-      - name: 'Get CLI version from npm (for npm_latest mode)'
-        id: 'cli_version_npm'
-        if: "steps.cli_source.outputs.mode == 'npm_latest'"
-        run: |
-          CLI_VERSION=$(npm view @qwen-code/qwen-code version --tag=latest)
-          if [[ -z "${CLI_VERSION}" ]]; then
-            echo '::error::Could not get latest stable CLI version from npm'
-            exit 1
-          fi
-          echo "CLI_VERSION=${CLI_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Using latest stable CLI version from npm: ${CLI_VERSION}"
-
-      - name: 'Download CLI package from npm'
-        id: 'cli_download'
-        if: "steps.cli_source.outputs.mode == 'npm_latest'"
-        env:
-          CLI_VERSION: '${{ steps.cli_version_npm.outputs.CLI_VERSION }}'
-        run: |
-          # Create temp directory for CLI package
-          CLI_TMP_DIR=$(mktemp -d)
-          echo "CLI_TMP_DIR=${CLI_TMP_DIR}" >> "$GITHUB_OUTPUT"
-
-          # Download CLI package
-          echo "Downloading @qwen-code/qwen-code@${CLI_VERSION}..."
-          npm pack "@qwen-code/qwen-code@${CLI_VERSION}" --pack-destination "${CLI_TMP_DIR}"
-
-          # Extract package
-          cd "${CLI_TMP_DIR}"
-          tar -xzf qwen-code-qwen-code-*.tgz
-
-          echo "CLI package extracted to: ${CLI_TMP_DIR}/package"
-          echo "CLI package contents:"
-          ls -la "${CLI_TMP_DIR}/package/"
+          echo "mode=build_from_source" >> "$GITHUB_OUTPUT"
+          echo "Building SDK with CLI built from current branch/ref"
 
       - name: 'Build CLI from source'
         id: 'cli_build'
-        if: "steps.cli_source.outputs.mode == 'build_from_source'"
         run: |
           # Build the CLI bundle from source
           echo "Building CLI from source..."
@@ -228,23 +184,43 @@ jobs:
         run: |-
           npm run build
 
-      - name: 'Bundle CLI into SDK (from npm)'
-        if: "steps.cli_source.outputs.mode == 'npm_latest'"
-        working-directory: 'packages/sdk-typescript'
-        env:
-          CLI_PACKAGE_PATH: '${{ steps.cli_download.outputs.CLI_TMP_DIR }}/package'
-        run: |
-          node scripts/bundle-cli-from-npm.js
-
-      - name: 'Bundle CLI into SDK (from source)'
-        if: "steps.cli_source.outputs.mode == 'build_from_source'"
+      - name: 'Bundle CLI into SDK'
         working-directory: 'packages/sdk-typescript'
         run: |
           node scripts/bundle-cli.js
 
+      - name: 'Build CLI binary'
+        env:
+          CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
+        run: |
+          # Install pkg for creating native binaries
+          npm install -g pkg
+
+          CLI_SOURCE_DIR="./dist"
+
+          # Determine the entry point
+          if [[ -f "${CLI_SOURCE_DIR}/dist/index.js" ]]; then
+            ENTRY_POINT="${CLI_SOURCE_DIR}/dist/index.js"
+          elif [[ -f "${CLI_SOURCE_DIR}/package/dist/index.js" ]]; then
+            ENTRY_POINT="${CLI_SOURCE_DIR}/package/dist/index.js"
+          else
+            echo "::error::Could not find CLI entry point"
+            exit 1
+          fi
+
+          echo "Building CLI binary from: ${ENTRY_POINT}"
+
+          # Build binaries for multiple platforms
+          pkg "${ENTRY_POINT}" \
+            --output "packages/sdk-typescript/dist/cli/qwen-code" \
+            --targets node18-linux-x64,node18-macos-x64,node18-win-x64
+
+          echo "CLI binary built successfully"
+          ls -la packages/sdk-typescript/dist/cli/
+
       - name: 'Record bundled CLI version'
         env:
-          CLI_VERSION: "${{ steps.cli_source.outputs.mode == 'npm_latest' && steps.cli_version_npm.outputs.CLI_VERSION || steps.cli_build.outputs.CLI_VERSION }}"
+          CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
         run: |
           # Create a metadata file to record which CLI version was bundled
           echo "${CLI_VERSION}" > packages/sdk-typescript/dist/BUNDLED_CLI_VERSION
@@ -289,8 +265,7 @@ jobs:
           IS_NIGHTLY: '${{ steps.vars.outputs.is_nightly }}'
           IS_PREVIEW: '${{ steps.vars.outputs.is_preview }}'
           REF: '${{ github.event.inputs.ref || github.sha }}'
-          CLI_VERSION: "${{ steps.cli_source.outputs.mode == 'npm_latest' && steps.cli_version_npm.outputs.CLI_VERSION || steps.cli_build.outputs.CLI_VERSION }}"
-          CLI_SOURCE_MODE: '${{ steps.cli_source.outputs.mode }}'
+          CLI_VERSION: '${{ steps.cli_build.outputs.CLI_VERSION }}'
         run: |-
           # For stable releases, use the release branch; for nightly/preview, use the current ref
           if [[ "${IS_NIGHTLY}" == "true" || "${IS_PREVIEW}" == "true" ]]; then
@@ -301,12 +276,7 @@ jobs:
             PRERELEASE_FLAG=""
           fi
 
-          # Determine CLI source description
-          if [[ "${CLI_SOURCE_MODE}" == "npm_latest" ]]; then
-            CLI_SOURCE_DESC="latest stable CLI from npm"
-          else
-            CLI_SOURCE_DESC="CLI built from source (same branch/ref as SDK)"
-          fi
+          CLI_SOURCE_DESC="CLI built from source (same branch/ref as SDK)"
 
           # Create release notes file
           NOTES_FILE=$(mktemp)
@@ -343,13 +313,9 @@ jobs:
           RELEASE_TAG: '${{ steps.version.outputs.RELEASE_TAG }}'
         working-directory: 'packages/sdk-typescript'
         run: |-
-          # Upload all files from dist/ as release assets
-          for file in dist/*; do
-            if [[ -f "${file}" ]]; then
-              echo "Uploading ${file}..."
-              gh release upload "sdk-typescript-${RELEASE_TAG}" "${file}"
-            fi
-          done
+          # Upload all files from dist/ recursively as release assets
+          cd dist
+          find . -type f -exec gh release upload "sdk-typescript-${RELEASE_TAG}" {} \;
 
       - name: 'Create PR to merge release branch into main'
         if: |-
