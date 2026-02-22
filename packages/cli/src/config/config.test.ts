@@ -797,13 +797,13 @@ describe('loadCliConfig telemetry', () => {
   });
 
   it('should prioritize --telemetry-target CLI flag over settings', async () => {
-    process.argv = ['node', 'script.js', '--telemetry-target', 'gcp'];
+    process.argv = ['node', 'script.js', '--telemetry-target', 'local'];
     const argv = await parseArguments();
     const settings: Settings = {
       telemetry: { target: ServerConfig.DEFAULT_TELEMETRY_TARGET },
     };
     const config = await loadCliConfig(settings, argv);
-    expect(config.getTelemetryTarget()).toBe('gcp');
+    expect(config.getTelemetryTarget()).toBe('local');
   });
 
   it('should use default target if no target is provided via CLI or settings', async () => {
@@ -2188,14 +2188,14 @@ describe('Telemetry configuration via environment variables', () => {
   });
 
   it('should prioritize GEMINI_TELEMETRY_TARGET over settings', async () => {
-    vi.stubEnv('GEMINI_TELEMETRY_TARGET', 'gcp');
+    vi.stubEnv('GEMINI_TELEMETRY_TARGET', 'local');
     process.argv = ['node', 'script.js'];
     const argv = await parseArguments();
     const settings: Settings = {
       telemetry: { target: 'local' },
     } as unknown as Settings;
     const config = await loadCliConfig(settings, argv, undefined, []);
-    expect(config.getTelemetryTarget()).toBe('gcp');
+    expect(config.getTelemetryTarget()).toBe('local');
   });
 
   it('should throw when GEMINI_TELEMETRY_TARGET is invalid', async () => {
